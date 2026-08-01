@@ -1,27 +1,29 @@
 # pbj-wayland
 
-A background daemon that watches whatever's currently playing over MPRIS (Spotify, Cider, or anything else exposing the standard Linux media-player D-Bus interface) and sets your Wayland wallpaper to a processed version of the current track's album art.
+A background daemon that watches your currently-playing media over MPRIS (Spotify, Cider, or anything else exposing the standard Linux media-player D-Bus interface) and turns the current track's album art into a Wayland wallpaper.
 
 On every track change, it:
 
 1. Finds the active MPRIS player and reads the new track's `art_url` from its metadata.
 2. Downloads the album art.
-3. Builds a 1920×1080 wallpaper from it: a heavily blurred, scaled-up copy of the artwork as the background, with the original artwork composited on top, centered and scaled down (`resize_contain`).
-4. Writes the result to disk and hands it off to the system's wallpaper tool to actually apply it.
+3. Builds a 1920×1080 wallpaper from it: a blurred copy of the artwork is scaled and cropped to fill the whole canvas, then the original sharp artwork is composited on top, centered and scaled down to fit.
+4. Writes the result to disk and hands it off to `awww` to apply it.
 
-This is a live-updating, "wallpaper reacts to what you're listening to" tool rather than a one-shot script — it holds an open MPRIS event subscription and reacts to `TrackChanged` events as they happen, skipping redundant work if the same track/art URL comes through twice.
+This is a live-updating tool, not a one-shot script — it holds an open MPRIS event subscription and reacts to `TrackChanged` events as they come in, skipping redundant work if the same track/art URL fires twice in a row.
 
 ## How it works
 
-- **Player discovery & events** — `mpris::PlayerFinder` locates the active player and exposes a blocking event stream; the daemon matches on `Event::TrackChanged` and pulls the `art_url` out of the track metadata.
-- **Album art fetch** — `reqwest` (blocking client) downloads the art URL to a local file.
-- **Compositing** — `imageproc`/`image` do the actual pixel work: the artwork is cloned and blurred for the background, the foreground copy is Lanczos3-resized to fit within the target dimensions while preserving aspect ratio, and the two are composited with the foreground centered over the blurred backdrop.
-- **Applying the wallpaper** — the finished JPEG is handed off to `awww` (`awww img <path>`) via `std::process::Command`, the wlroots wallpaper daemon that succeeded `swww`.
+- **Player discovery & events** — `mpris::PlayerFinder` locates the active player and exposes a blocking event stream; the daemon matches on `Event::TrackChanged` and pulls `art_url` out of the track metadata. If no active player is found, it reports that and exits cleanly rather than panicking.
+- **Album art fetch** — a blocking `reqwest` client downloads the art to the path passed on the command line.
+- **Compositing** — two separate resize passes, not one:
+  - `resize_cover` scales the blurred copy up so it fully covers the 1920×1080 target, then center-crops off the overflow — this is the background layer.
+  - `resize_contain` scales the sharp copy down to fit within the same target while preserving aspect ratio, then composites it centered over the cover'd background.
+- **Applying the wallpaper** — the finished JPEG is handed off to [`awww`](https://codeberg.org/LGFae/awww) (the actively-maintained successor to `swww`) via `std::process::Command`.
 
 ## Requirements
 
-- A Wayland compositor and [`awww`](https://codeberg.org/LGFae/awww) (the actively-maintained successor to `swww`, same CLI) installed and running as the wallpaper daemon
-- A media player currently running that exposes an MPRIS D-Bus interface (Spotify, Cider, etc.)
+- A Wayland compositor with [`awww`](https://codeberg.org/LGFae/awww) installed and running as the wallpaper daemon
+- A media player running that exposes an MPRIS D-Bus interface (Spotify, Cider, etc.)
 - Rust toolchain (uses `imageproc`, `mpris`, and `reqwest` with the `blocking` feature)
 
 ## Building
@@ -32,17 +34,19 @@ cargo build --release
 
 ## Running
 
+The temp file path (where downloaded/processed album art is written) is passed as a required argument:
+
 ```sh
-cargo run --release
+cargo run --release -- /path/to/temp.jpg
 ```
 
-The daemon prints which player it attached to, then blocks listening for track changes until killed.
+Running with no argument (or more than one) prints a usage message and exits.
 
-## Things to fix before relying on this day-to-day
+## Known issues / still to fix
 
-- The output path is hardcoded to `/home/lee/Pictures/temp.jpg` in `main.rs` — this needs to be parameterized (e.g. via `$HOME` or a config file) before it'll work on another machine or user account.
-- No `.unwrap()`/`.expect()` hardening yet around player discovery — if no active MPRIS player is found at startup, the program will panic rather than retry or wait.
+- The 1920×1080 target resolution is still hardcoded in `process_album_art` — it isn't yet derived from the actual output/screen resolution, so multi-monitor or non-1080p setups won't be framed correctly.
+- `meta.art_url()` and the `awww` command's output are still unwrapped — a track with no art, or a failed `awww` invocation, will panic the whole daemon rather than logging and continuing.
 
 ## Roadmap
 
-Part of a broader plan to build a music-reactive wallpaper engine — this is the Wayland/`wlr-layer-shell`-oriented piece, following on from an initial KDE Plasma-focused version.
+Part of a broader plan to build a music-reactive wallpaper engine — this is the Wayland / `wlr-layer-shell`-oriented piece, following on from an earlier KDE Plasma-focused version.
