@@ -1,0 +1,9 @@
+[package]
+name = "pbj_wayland"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+imageproc = "0.27.0"
+mpris = "2.1.0"
+reqwest = { version = "0.13.4", features = ["blocking"]}
