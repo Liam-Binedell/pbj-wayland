@@ -51,31 +51,34 @@ fn process_album_art(path: &str) -> Result<(), Box<dyn Error>> {
 
 fn begin_listener(path: &str) -> Result<(), Box<dyn Error>> {
     let finder = PlayerFinder::new()?;
-    let player = finder.find_active()?;
-
-    let mut curr_url: String = String::new();
-    for event in player.events()? {
-        match event {
-            Ok(Event::Playing) | Ok(Event::Paused) => println!("Playback toggle"),
-            Ok(Event::TrackChanged(meta)) => {
-                let url = meta.art_url().unwrap();
-                if curr_url != url {
-                    if let Ok(()) = get_album_art(url, &path) {
-                        if let Ok(()) = process_album_art(&path) {
-                            let mut cmd = Command::new("awww");
-                            let out = cmd.arg("img").arg(path).output().unwrap();
-                            let stdout = String::from_utf8(out.stdout).unwrap();
-                            let stderr = String::from_utf8(out.stderr).unwrap();
-                            println!("out: {stdout}");
-                            println!("err: {stderr}");
-                            curr_url = url.to_string();
+    if let Ok(player) = finder.find_active() {
+        let mut curr_url: String = String::new();
+        for event in player.events()? {
+            match event {
+                Ok(Event::Playing) | Ok(Event::Paused) => println!("Playback toggle"),
+                Ok(Event::TrackChanged(meta)) => {
+                    let url = meta.art_url().unwrap();
+                    if curr_url != url {
+                        if let Ok(()) = get_album_art(url, &path) {
+                            if let Ok(()) = process_album_art(&path) {
+                                let mut cmd = Command::new("awww");
+                                let out = cmd.arg("img").arg(path).output().unwrap();
+                                let stdout = String::from_utf8(out.stdout).unwrap();
+                                let stderr = String::from_utf8(out.stderr).unwrap();
+                                println!("out: {stdout}");
+                                println!("err: {stderr}");
+                                curr_url = url.to_string();
+                            }
                         }
                     }
                 }
+                Err(_e) => continue,
+                _ => (),
             }
-            Err(_e) => continue,
-            _ => (),
         }
+    } else {
+        eprintln!("No active player detected!");
+        std::process::exit(1);
     }
     Ok(())
 }
@@ -88,10 +91,6 @@ fn main() {
     }
 
     let path: &str = args[1].as_str();
-    let finder: PlayerFinder = PlayerFinder::new().unwrap();
-    let player = finder.find_active().unwrap();
-
-    println!("Listening to changes on: {}", player.identity());
 
     begin_listener(path).expect("Failed to be a good app");
 }
