@@ -10,22 +10,34 @@ fn get_album_art(url: &str, path: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn resize_contain(img: &DynamicImage, target_w: u32, target_h: u32, bg: &DynamicImage) -> DynamicImage {
+fn resize_cover(img: &DynamicImage, target_w: u32, target_h: u32) -> DynamicImage {
     let (src_w, src_h) = (img.width(), img.height());
-    let scale = (target_w as f64/ src_w as f64).min(target_h as f64 / src_h as f64) / 6.0;
 
-    let new_h = (src_h as f64 * scale).round() as u32;
+    let scale = (target_w as f64 / src_w as f64).max(target_h as f64 / src_h as f64);
+    let new_w = (src_w as f64 * scale).ceil() as u32;
+    let new_h = (src_h as f64 * scale).ceil() as u32;
+    let resized = img.resize_exact(new_w, new_h, FilterType::Lanczos3);
+
+    let x = (new_w - target_w) / 2;
+    let y = (new_h - target_h) / 2;
+    resized.crop_imm(x, y, target_w, target_h)
+}
+
+fn resize_contain(img: &DynamicImage, bg: &DynamicImage) -> DynamicImage {
+    let (target_w, target_h) = (bg.width(), bg.height());
+    let (src_w, src_h) = (img.width(), img.height());
+
+    let scale = (target_w as f64 / src_w as f64).min(target_h as f64 / src_h as f64);
     let new_w = (src_w as f64 * scale).round() as u32;
+    let new_h = (src_h as f64 * scale).round() as u32;
 
     let resized = img.resize(new_w, new_h, FilterType::Lanczos3);
 
-    println!("original dims (h,w): {src_h} {src_w}");
-    println!("scale: {scale}");
-    println!("resized dims (h,w): {new_h} {new_w}");
-    println!("output dims (h,w): {target_h} {target_w}");
     let x_offset = (target_w - new_w) / 2;
     let y_offset = (target_h - new_h) / 2;
 
+    println!("Original: {src_w}px {src_h}px");
+    println!("Resized: {new_w}px {new_h}px");
     DynamicImage::ImageRgb8(overlay(&bg.to_rgb8(), &resized.to_rgb8(), x_offset, y_offset))
 }
 
@@ -33,8 +45,9 @@ fn process_album_art(path: &str) -> Result<(), Box<dyn Error>> {
     let img = ImageReader::open(path)?.decode()?;
     let mut bg = img.clone();
     bg = bg.blur(10.0);
-    let overlay = resize_contain(&img, 1920, 1080, &bg);
-    overlay.save_with_format(path, ImageFormat::Jpeg)?;
+    let cover = resize_cover(&bg, 1920, 1080);
+    let res = resize_contain(&img, &cover);
+    res.save_with_format(path, ImageFormat::Jpeg)?;
     Ok(())
 }
 
