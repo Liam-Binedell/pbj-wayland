@@ -1,6 +1,6 @@
 use mpris::{PlayerFinder, Event};
 use reqwest::blocking;
-use std::{error::Error, fs::File, io, process::Command};
+use std::{error::Error, fs::File, io, process::Command, env};
 use imageproc::{compose::overlay, image::{DynamicImage, ImageFormat, ImageReader, imageops::FilterType}};
 
 fn get_album_art(url: &str, path: &str) -> Result<(), Box<dyn Error>> {
@@ -82,6 +82,13 @@ fn begin_listener() -> Result<(), Box<dyn Error>> {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        eprintln!("Usage: {} <path to temp file>", args[0]);
+        std::process::exit(1);
+    }
+
+    let path = args[1];
     let finder: PlayerFinder = PlayerFinder::new().unwrap();
     let player = finder.find_active().unwrap();
 
