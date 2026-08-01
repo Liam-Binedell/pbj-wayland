@@ -36,8 +36,6 @@ fn resize_contain(img: &DynamicImage, bg: &DynamicImage) -> DynamicImage {
     let x_offset = (target_w - new_w) / 2;
     let y_offset = (target_h - new_h) / 2;
 
-    println!("Original: {src_w}px {src_h}px");
-    println!("Resized: {new_w}px {new_h}px");
     DynamicImage::ImageRgb8(overlay(&bg.to_rgb8(), &resized.to_rgb8(), x_offset, y_offset))
 }
 
