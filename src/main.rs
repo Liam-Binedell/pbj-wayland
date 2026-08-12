@@ -4,9 +4,15 @@ use imageproc::{
 };
 use mpris::{Event, PlayerFinder};
 use reqwest::blocking;
-use std::{env, error::Error, process, time::Duration};
+use std::{
+    env::{self, temp_dir},
+    error::Error,
+    process,
+    time::Duration,
+};
 
 const TEMP_IMAGE: &str = "pbj-wayland.jpg";
+const DEFAULT_IMAGE: &'static [u8] = include_bytes!("../assets/floyd_triangle.jpg");
 
 fn get_album_art(url: &str) -> Result<DynamicImage, Box<dyn Error>> {
     let response = blocking::get(url)?;
@@ -57,17 +63,21 @@ fn process_album_art(img: &DynamicImage) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn command_awww(path: &str) {
+    match process::Command::new("awww")
+        .arg("img")
+        .arg(env::temp_dir().join(path))
+        .output()
+    {
+        Ok(_) => (),
+        Err(_) => (),
+    }
+}
+
 fn update_wallpaper(url: &str) {
     if let Ok(img) = get_album_art(url) {
         if let Ok(()) = process_album_art(&img) {
-            match process::Command::new("awww")
-                .arg("img")
-                .arg(env::temp_dir().join(TEMP_IMAGE))
-                .output()
-            {
-                Ok(_) => (),
-                Err(_) => (),
-            }
+            command_awww(&temp_dir().join(TEMP_IMAGE).to_string_lossy());
         }
     }
 }
@@ -116,5 +126,10 @@ fn begin_listener() {
 }
 
 fn main() {
+    let default = load_from_memory(DEFAULT_IMAGE).unwrap();
+    default
+        .save_with_format(temp_dir().join(TEMP_IMAGE), ImageFormat::Jpeg)
+        .unwrap();
+    command_awww(&temp_dir().join(TEMP_IMAGE).to_string_lossy());
     begin_listener();
 }
