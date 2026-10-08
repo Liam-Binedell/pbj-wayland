@@ -1,7 +1,6 @@
 TARGET="./target/release/pbj_wayland"
-DEST="/usr/bin/pbj-wayland"
+DEST="/usr/bin/pbj_wayland"
+
 cargo build --release
-if [ -f "$DEST" ]; then
-  sudo rm $DEST
-fi
-sudo cp $TARGET $DEST
+
+sudo install -m 755 -D "$TARGET" "$DEST"
